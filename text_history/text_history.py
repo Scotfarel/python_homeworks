@@ -1,5 +1,9 @@
 class TextHistory:
-    pass
+    _text = ''
+    _version = 0
+
+    def __init__(self):
+        pass
 
 
 class Action:
@@ -16,3 +20,7 @@ class ReplaceAction(Action):
 
 class DeleteAction(Action):
     pass
+
+
+t = TextHistory()
+print(t._text)
