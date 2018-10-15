@@ -24,7 +24,6 @@ def str_format(params, idx, line, context_line):
 
 def grep(lines, params):
     req = create_req(params)
-
     before_line = max(params.before_context, params.context)
     after_line = max(params.context, params.after_context)
     context_lines = []
