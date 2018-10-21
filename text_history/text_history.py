@@ -1,3 +1,6 @@
+from abc import abstractmethod
+
+
 class TextHistory:
     def __init__(self):
         self._text = ''
@@ -17,15 +20,16 @@ class TextHistory:
             raise ValueError
         self._version = act.to_version
         self._text = act.text
+
         return self._version
 
     def insert(self, ins_str, pos=None):
         if pos is None:
             pos = len(self._text)
 
-        action = InsertAction(pos, ins_str, self._version, self._version + 1)
-        new_version = self.action(action)
-        return new_version
+        action = InsertAction(pos, ins_str, self.version, self.version + 1)
+        self._text = action.apply(ins_str)
+        return self.action(action)
 
     def replace(self, rep_str, pos=None):
         pass
@@ -43,6 +47,10 @@ class Action:
     def __init__(self, from_version, to_version):
         self._from_version = from_version
         self._to_version = to_version
+
+    @abstractmethod
+    def apply(self, insert_str):
+        pass
 
     @property
     def from_version(self):
@@ -67,8 +75,9 @@ class InsertAction(Action):
     def pos(self):
         return self._pos
 
-    def _insert(self, insert_str, pos):
-        self._text = self._text[:pos] + insert_str + self._text[pos:]
+    def apply(self, insert_str):
+        self._text = self.text[:self.pos] + insert_str + self.text[self.pos:]
+        return self.text
 
 
 class ReplaceAction(Action):
@@ -84,6 +93,9 @@ class ReplaceAction(Action):
     @property
     def pos(self):
         return self._pos
+
+    def apply(self, insert_str):
+        return self.text
 
     def _replace(self, insert_str, pos):
         pass
@@ -102,6 +114,9 @@ class DeleteAction(Action):
     @property
     def length(self):
         return self._length
+
+    def apply(self, old_text, insert_str):
+        pass
 
     def _delete(self, pos, del_len):
         pass
