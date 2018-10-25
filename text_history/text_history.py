@@ -24,6 +24,8 @@ class TextHistory:
             raise ValueError
         self._text = action.apply(self.text)
         self._version = action.to_version
+        self._actions.append(action)
+
         return self.version
 
     def insert(self, text, pos=None):
@@ -54,8 +56,14 @@ class TextHistory:
 
         return self.action(action)
 
-    def get_actions(self, from_version=0, to_version=0):
-        pass
+    def get_actions(self, from_version=0, to_version=None):
+        if to_version is None:
+            to_version = self.version
+
+        if from_version < 0 or to_version > self.version or to_version < from_version:
+            raise ValueError
+
+        return self.actions[from_version:to_version]
 
 
 class Action:
