@@ -47,7 +47,12 @@ class TextHistory:
         return self.action(action)
 
     def delete(self, pos, length):
-        pass
+        if pos < 0 or pos > len(self.text):
+            raise ValueError
+
+        action = DeleteAction(pos, length, self.version, self.version + 1)
+
+        return self.action(action)
 
     def get_actions(self, from_version=0, to_version=0):
         pass
@@ -124,5 +129,7 @@ class DeleteAction(Action):
     def length(self):
         return self._length
 
-    def apply(self, mutable_string):
-        pass
+    def apply(self, text):
+        if self.pos + self.length > len(text):
+            raise ValueError
+        return text[:self.pos] + text[self.pos + self.length:]
