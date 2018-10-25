@@ -15,31 +15,41 @@ class TextHistory:
     def version(self):
         return self._version
 
-    def action(self, act):
-        if self._version != act.from_version or act.from_version == act.to_version:
+    @property
+    def actions(self):
+        return self._actions
+
+    def action(self, action):
+        if action.from_version != self.version or action.from_version >= action.to_version:
             raise ValueError
-        self._version = act.to_version
-        self._text = act.text
+        self._text = action.apply(self.text)
+        self._version = action.to_version
+        return self.version
 
-        return self._version
-
-    def insert(self, ins_str, pos=None):
+    def insert(self, text, pos=None):
         if pos is None:
-            pos = len(self._text)
+            pos = len(self.text)
+        if pos < 0 or pos > len(self.text):
+            raise ValueError
 
-        action = InsertAction(pos, ins_str, self.version, self.version + 1)
-        self._text = action.apply(ins_str)
+        action = InsertAction(pos, text, self.version, self.version + 1)
+
         return self.action(action)
 
-    def replace(self, rep_str, pos=None):
-        pass
+    def replace(self, text, pos=None):
+        if pos is None:
+            pos = len(self.text)
+        if pos < 0 or pos > len(self.text):
+            raise ValueError
 
-    def delete(self, pos=None, length=0):
+        action = ReplaceAction(pos, text, self.version, self.version + 1)
+
+        return self.action(action)
+
+    def delete(self, pos, length):
         pass
 
     def get_actions(self, from_version=0, to_version=0):
-        # TODO(@me): wrapper for actions
-        # return wrapper(self._actions)
         pass
 
 
@@ -49,7 +59,7 @@ class Action:
         self._to_version = to_version
 
     @abstractmethod
-    def apply(self, insert_str):
+    def apply(self, mutable_string):
         pass
 
     @property
@@ -63,9 +73,9 @@ class Action:
 
 class InsertAction(Action):
     def __init__(self, pos, text, from_version, to_version):
+        super().__init__(from_version, to_version)
         self._pos = pos
         self._text = text
-        super().__init__(from_version, to_version)
 
     @property
     def text(self):
@@ -75,16 +85,15 @@ class InsertAction(Action):
     def pos(self):
         return self._pos
 
-    def apply(self, insert_str):
-        self._text = self.text[:self.pos] + insert_str + self.text[self.pos:]
-        return self.text
+    def apply(self, text):
+        return text[:self.pos] + self.text + text[self.pos:]
 
 
 class ReplaceAction(Action):
     def __init__(self, pos, text, from_version, to_version):
+        super().__init__(from_version, to_version)
         self._pos = pos
         self._text = text
-        super().__init__(from_version, to_version)
 
     @property
     def text(self):
@@ -94,18 +103,18 @@ class ReplaceAction(Action):
     def pos(self):
         return self._pos
 
-    def apply(self, insert_str):
-        return self.text
-
-    def _replace(self, insert_str, pos):
-        pass
+    def apply(self, text):
+        offset = len(self.text)
+        if self.pos + offset > len(text):
+            return text[:self.pos] + self.text
+        return text[:self.pos] + self.text + text[self.pos + len(self.text):]
 
 
 class DeleteAction(Action):
     def __init__(self, pos, length, from_version, to_version):
+        super().__init__(from_version, to_version)
         self._pos = pos
         self._length = length
-        super().__init__(from_version, to_version)
 
     @property
     def pos(self):
@@ -115,8 +124,5 @@ class DeleteAction(Action):
     def length(self):
         return self._length
 
-    def apply(self, old_text, insert_str):
-        pass
-
-    def _delete(self, pos, del_len):
+    def apply(self, mutable_string):
         pass
