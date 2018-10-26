@@ -65,6 +65,64 @@ class TextHistory:
 
         return self.actions[from_version:to_version]
 
+    def optimize_insert(self):
+        changed = False
+        for idx, action in enumerate(self.actions):
+            if action == self.actions[-1]:
+                break
+            if isinstance(action, InsertAction) and isinstance(self.actions[idx + 1], InsertAction) \
+                    and action.pos + len(action.text) == self.actions[idx + 1].pos:
+
+                new_text = action.text + self.actions[idx + 1].text
+                new_action = InsertAction(action.pos, new_text, self.version, self.version + 1)
+
+                self.creating_new_action(idx, new_action)
+                changed = True
+        if changed:
+            self.optimize_insert()
+
+    def optimize_replace(self):
+        changed = False
+        for idx, action in enumerate(self.actions):
+            if action == self.actions[-1]:
+                break
+            if isinstance(action, ReplaceAction) and isinstance(self.actions[idx + 1], ReplaceAction) \
+                    and action.pos + len(action.text) == self.actions[idx + 1].pos:
+
+                new_text = action.text + self.actions[idx + 1].text
+                new_action = ReplaceAction(action.pos, new_text, self.version, self.version + 1)
+
+                self.creating_new_action(idx, new_action)
+                changed = True
+        if changed:
+            self.optimize_replace()
+
+    def optimize_delete(self):
+        changed = False
+        for idx, action in enumerate(self.actions):
+            if action == self.actions[-1]:
+                break
+            if isinstance(action, DeleteAction) and isinstance(self.actions[idx + 1], DeleteAction) \
+                    and action.pos == self.actions[idx + 1].pos:
+
+                new_length = action.length + self.actions[idx + 1].length
+                new_action = DeleteAction(action.pos, new_length, self.version, self.version + 1)
+
+                self.creating_new_action(idx, new_action)
+                changed = True
+        if changed:
+            self.optimize_delete()
+
+    def creating_new_action(self, idx, new_action):
+        self.actions.pop(idx + 1)
+        self.actions.pop(idx)
+        self.actions.insert(idx, new_action)
+
+    def optimize_actions(self):
+        self.optimize_insert()
+        self.optimize_replace()
+        self.optimize_delete()
+
 
 class Action:
     def __init__(self, from_version, to_version):
@@ -72,7 +130,7 @@ class Action:
         self._to_version = to_version
 
     @abstractmethod
-    def apply(self, mutable_string):
+    def apply(self, text):
         pass
 
     @property
