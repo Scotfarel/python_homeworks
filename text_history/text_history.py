@@ -19,6 +19,9 @@ class TextHistory:
     def actions(self):
         return self._actions
 
+    def increase_version(self):
+        return self.version + 1
+
     def action(self, action):
         if action.from_version != self.version or action.from_version >= action.to_version:
             raise ValueError
@@ -34,7 +37,7 @@ class TextHistory:
         if pos < 0 or pos > len(self.text):
             raise ValueError
 
-        action = InsertAction(pos, text, self.version, self.version + 1)
+        action = InsertAction(pos, text, self.version, self.increase_version())
 
         return self.action(action)
 
@@ -44,7 +47,7 @@ class TextHistory:
         if pos < 0 or pos > len(self.text):
             raise ValueError
 
-        action = ReplaceAction(pos, text, self.version, self.version + 1)
+        action = ReplaceAction(pos, text, self.version, self.increase_version())
 
         return self.action(action)
 
@@ -52,7 +55,7 @@ class TextHistory:
         if pos < 0 or pos > len(self.text):
             raise ValueError
 
-        action = DeleteAction(pos, length, self.version, self.version + 1)
+        action = DeleteAction(pos, length, self.version, self.increase_version())
 
         return self.action(action)
 
@@ -74,7 +77,7 @@ class TextHistory:
                     and action.pos + len(action.text) == self.actions[idx + 1].pos:
 
                 new_text = action.text + self.actions[idx + 1].text
-                new_action = InsertAction(action.pos, new_text, self.version, self.version + 1)
+                new_action = InsertAction(action.pos, new_text, self.version, self.increase_version())
 
                 self.creating_new_action(idx, new_action)
                 changed = True
@@ -90,7 +93,7 @@ class TextHistory:
                     and action.pos + len(action.text) == self.actions[idx + 1].pos:
 
                 new_text = action.text + self.actions[idx + 1].text
-                new_action = ReplaceAction(action.pos, new_text, self.version, self.version + 1)
+                new_action = ReplaceAction(action.pos, new_text, self.version, self.increase_version())
 
                 self.creating_new_action(idx, new_action)
                 changed = True
@@ -106,7 +109,7 @@ class TextHistory:
                     and action.pos == self.actions[idx + 1].pos:
 
                 new_length = action.length + self.actions[idx + 1].length
-                new_action = DeleteAction(action.pos, new_length, self.version, self.version + 1)
+                new_action = DeleteAction(action.pos, new_length, self.version, self.increase_version())
 
                 self.creating_new_action(idx, new_action)
                 changed = True
