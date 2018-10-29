@@ -80,7 +80,7 @@ class TextHistory:
                 new_text = action.text + self.actions[idx + 1].text
                 new_action = InsertAction(action.pos, new_text, self.version, self.increase_version())
 
-                self.creating_new_action(idx, new_action)
+                self.replace_optimized_actions(idx, new_action)
                 changed = True
         if changed:
             self.optimize_insert()
@@ -96,7 +96,7 @@ class TextHistory:
                 new_text = action.text + self.actions[idx + 1].text
                 new_action = ReplaceAction(action.pos, new_text, self.version, self.increase_version())
 
-                self.creating_new_action(idx, new_action)
+                self.replace_optimized_actions(idx, new_action)
                 changed = True
         if changed:
             self.optimize_replace()
@@ -112,12 +112,12 @@ class TextHistory:
                 new_length = action.length + self.actions[idx + 1].length
                 new_action = DeleteAction(action.pos, new_length, self.version, self.increase_version())
 
-                self.creating_new_action(idx, new_action)
+                self.replace_optimized_actions(idx, new_action)
                 changed = True
         if changed:
             self.optimize_delete()
 
-    def creating_new_action(self, idx, new_action):
+    def replace_optimized_actions(self, idx, new_action):
         self.actions.pop(idx + 1)
         self.actions.pop(idx)
         self.actions.insert(idx, new_action)
