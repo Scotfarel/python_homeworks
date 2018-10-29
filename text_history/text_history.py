@@ -22,6 +22,10 @@ class TextHistory:
     def increase_version(self):
         return self.version + 1
 
+    def check_pos(self, pos):
+        if pos < 0 or pos > len(self.text):
+            raise ValueError
+
     def action(self, action):
         if action.from_version != self.version or action.from_version >= action.to_version:
             raise ValueError
@@ -34,8 +38,7 @@ class TextHistory:
     def insert(self, text, pos=None):
         if pos is None:
             pos = len(self.text)
-        if pos < 0 or pos > len(self.text):
-            raise ValueError
+        self.check_pos(pos)
 
         action = InsertAction(pos, text, self.version, self.increase_version())
 
@@ -44,16 +47,14 @@ class TextHistory:
     def replace(self, text, pos=None):
         if pos is None:
             pos = len(self.text)
-        if pos < 0 or pos > len(self.text):
-            raise ValueError
+        self.check_pos(pos)
 
         action = ReplaceAction(pos, text, self.version, self.increase_version())
 
         return self.action(action)
 
     def delete(self, pos, length):
-        if pos < 0 or pos > len(self.text):
-            raise ValueError
+        self.check_pos(pos)
 
         action = DeleteAction(pos, length, self.version, self.increase_version())
 
