@@ -54,12 +54,13 @@ class TaskQueueServer:
         self._port = port
         self._path = path
         self._timeout = timeout
-        self._queues = defaultdict()
+        self._queues = defaultdict(list)
 
     def apply_command_action(self, current_command):
         t = "b'ADD"
         if current_command.method == t:
-            self.add_task(current_command)
+            added_task_id = self.add_task(current_command)
+            return added_task_id
         elif current_command.method == 'GET':
             self.get_task(current_command)
         elif current_command.method == 'ACK':
@@ -82,12 +83,12 @@ class TaskQueueServer:
                 command = current_connection.recv(2048)
                 current_command = Command(command)
                 res = self.apply_command_action(current_command)
-                current_connection.send(res)
+                current_connection.send(res.encode('utf8'))
 
     def add_task(self, current_command):
         task = Task(current_command.task_length, current_command.task_data)
         self.queues[current_command.queue_name].append(task)
-        return task.task_id
+        return str(task.task_id)
 
     def get_task(self, current_command):
         pass
