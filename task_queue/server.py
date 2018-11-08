@@ -2,6 +2,7 @@ import socket
 import argparse
 import uuid
 import re
+import time
 from collections import defaultdict
 
 
@@ -11,43 +12,10 @@ class Task:
         self._length = length
         self._data = data
         self._status = 'Free'
-        self._timeout = 300
 
     @property
     def task_id(self):
         return self._task_id
-
-
-class Command:
-    def parse_cmd(self, command):
-        self.method = command[0]
-        queue_name = command[1]
-        task_id = command[1]
-        task_length = command[2]
-        task_data = command[3]
-
-    @staticmethod
-    def apply():
-        pass
-
-
-class ADDcommand(Command):
-    def __init__(self):
-        self._queue_name = self.command[1]
-
-    pass
-
-
-class GETcommand(Command):
-    pass
-
-
-class ACKcommand(Command):
-    pass
-
-
-class INcommand(Command):
-    pass
 
 
 class TaskQueueServer:
@@ -57,88 +25,80 @@ class TaskQueueServer:
         self._path = path
         self._timeout = timeout
         self._queues = defaultdict(list)
+        self._task_in_work = defaultdict(list)
+
+    def add_cmd(self, current_command):
+        add_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<length>.*) (?P<data>.*)')
+        match = add_cmd_pattern.match(current_command.rstrip())
+        added_task = Task(match.group('length'), match.group('data'))
+        self._queues[match.group('queue')].append(added_task)
+        return str(added_task.task_id)
+
+    def get_cmd(self, current_command):
+        get_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*)')
+        match = get_cmd_pattern.match(current_command.rstrip())
+        res = 'NONE'
+        for x in list(reversed(self._queues[match.group('queue')])):
+            if x._status == 'Free':
+                res = str(x._task_id) + str(x._length) + str(x._data)
+                x._status = 'Busy'
+                x.issue_time = time.time()
+                self._task_in_work[match.group('queue')].append(x)
+                break
+        return res
+
+    def ack_cmd(self, current_command):
+        ack_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
+        match = ack_cmd_pattern.match(current_command.rstrip())
+        for x in self._queues[match.group('queue')]:
+            if x._task_id == match.group('id'):
+                self._queues[match.group('queue')].remove(x)
+                self._task_in_work[match.group('queue')].remove(x)
+        return 'OK'
+
+    def check_task_cmd(self, current_command):
+        in_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
+        match = in_cmd_pattern.match(current_command.rstrip())
+        res = 'NO'
+        for x in self._queues[match.group('queue')]:
+            if str(x._task_id) == match.group('id'):
+                res = 'YES'
+                break
+        return res
+
+    def save_cmd(self, current_command):
+        save_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
+        match = save_cmd_pattern.match(current_command.rstrip())
+        pass
+
+    def tasks_timeout_verification(self):
+        for queue in self._task_in_work.values():
+            for task in queue:
+                if time.time() - task.issue_time > 300:
+                    task._status = 'Free'
+                    self._task_in_work[queue].remove(task)
 
     def apply_command_action(self, current_command):
         cmd_name, *args = current_command.split(' ')
         if not cmd_name:
             raise AttributeError
-        cmd_name = cmd_name.strip().lower()
-        cmd = {'ADD': add_cmd, 'GET': del_cmd, 'ACK': ack_cmd, 'IN': in_cmd, 'SAVE': save_cmd}
-
-        elif current_command.method == 'GET':
-            self.get_task(current_command)
-        elif current_command.method == 'ACK':
-            self.ack_task(current_command)
-        elif current_command.method == 'IN':
-            self.check_task_in_queue(current_command)
-        elif current_command.method == 'SAVE':
-            self.save_state()
-        else:
-            raise AttributeError
+        cmd_name = cmd_name.strip()
+        cmd = {'ADD': self.add_cmd, 'GET': self.get_cmd, 'ACK': self.ack_cmd,
+               'IN': self.check_task_cmd, 'SAVE': self.save_cmd}.get(cmd_name)
+        return cmd(current_command)
 
     def run(self):
         connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        connection.bind((self.ip, self.port))
+        connection.bind((self._ip, self._port))
         connection.listen(1)
         while True:
             current_connection, address = connection.accept()
             while True:
-                command = current_connection.recv(2048)
-                #current_command = Command(command)
-                self.apply_command_action(command)
-                res = self.apply_command_action(current_command)
+                command = (current_connection.recv(2048)).decode('utf8')
+                self.tasks_timeout_verification()
+                res = self.apply_command_action(command)
                 current_connection.send(res.encode('utf8'))
-
-    def add_task(self, current_command):
-        added_task = Task(current_command.task_length, current_command.task_data)
-        self.queues[current_command.queue_name].append(added_task)
-        return str(added_task.task_id)
-
-    def get_task(self, current_command):
-        res = None
-        for x in list(reversed(self.queues[current_command.queue_name])):
-            if x.status == 'Free' and x.timeout == '300':
-                res = x.id + x.lenght + x.data
-                x.status = 'Busy' # что делать с таймаутом?
-                break
-        return res
-
-    def ack_task(self, current_command):
-        for idx, x in enumerate(self.queues[current_command.queue_name]):
-            if x.id == current_command.id:
-                self.queues[current_command.queue_name].pop(idx - 1)
-        return 'OK'
-
-    def check_task_in_queue(self, current_command):
-        res = 'NO'
-        if current_command.task_id in self.queues[current_command.queue_name]:
-            res = 'YES'
-        return res
-
-    def save_state(self):
-
-        pass
-
-    @property
-    def ip(self):
-        return self._ip
-
-    @property
-    def port(self):
-        return self._port
-
-    @property
-    def path(self):
-        return self._path
-
-    @property
-    def timeout(self):
-        return self._timeout
-
-    @property
-    def queues(self):
-        return self._queues
 
 
 def parse_args():
