@@ -69,7 +69,7 @@ class TaskQueueServer:
     def save_cmd(self, current_command):
         save_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
         match = save_cmd_pattern.match(current_command.rstrip())
-        pass
+        return 'OK'
 
     def tasks_timeout_verification(self):
         for queue in self._task_in_work.values():
@@ -81,10 +81,12 @@ class TaskQueueServer:
     def apply_command_action(self, current_command):
         cmd_name, *args = current_command.split(' ')
         if not cmd_name:
-            raise AttributeError
+            return 'recv_cmd_error'
         cmd_name = cmd_name.strip()
         cmd = {'ADD': self.add_cmd, 'GET': self.get_cmd, 'ACK': self.ack_cmd,
                'IN': self.check_task_cmd, 'SAVE': self.save_cmd}.get(cmd_name)
+        if not cmd:
+            return 'ERROR'
         return cmd(current_command)
 
     def run(self):
