@@ -22,7 +22,7 @@ class TaskQueueServer:
         self._path = path
         self._timeout = timeout
         self._queues = defaultdict(list)
-        self._task_in_work = defaultdict(list)
+        self._tasks_in_work = defaultdict(list)
 
     def add_cmd(self, current_command):
         add_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<length>.*) (?P<data>.*)')
@@ -40,7 +40,7 @@ class TaskQueueServer:
                 res = str(task._task_id) + str(task._length) + str(task._data)
                 task._status = 'Busy'
                 task.issue_time = time.time()
-                self._task_in_work[match.group('queue')].append(task)
+                self._tasks_in_work[match.group('queue')].append(task)
                 break
         return res
 
@@ -50,7 +50,7 @@ class TaskQueueServer:
         for task in self._queues[match.group('queue')]:
             if task._task_id == match.group('id'):
                 self._queues[match.group('queue')].remove(task)
-                self._task_in_work[match.group('queue')].remove(task)
+                self._tasks_in_work[match.group('queue')].remove(task)
         return 'OK'
 
     def check_task_cmd(self, current_command):
@@ -64,14 +64,17 @@ class TaskQueueServer:
         return res
 
     def save_cmd(self, current_command):
+        queues_to_save = {'_queues': self._queues, '_tasks_in_work': self._tasks_in_work}
+        pickle.dump(queues_to_save, open(self._path + 'srv_cash', 'wb'))
+
         return 'OK'
 
     def check_tasks_timeout(self):
-        for queue in self._task_in_work.values():
+        for queue in self._tasks_in_work.values():
             for task in queue:
                 if time.time() - task.issue_time > self._timeout:
                     task._status = 'Free'
-                    self._task_in_work[queue].remove(task)
+                    self._tasks_in_work[queue].remove(task)
 
     def apply_command_action(self, current_command):
         cmd_name, *args = current_command.split(' ')
