@@ -1,6 +1,7 @@
 import socket
 import argparse
 import uuid
+import re
 from collections import defaultdict
 
 
@@ -10,6 +11,7 @@ class Task:
         self._length = length
         self._data = data
         self._status = 'Free'
+        self._timeout = 300
 
     @property
     def task_id(self):
@@ -17,35 +19,35 @@ class Task:
 
 
 class Command:
-    def __init__(self, command):
-        args_list = str(command).split(" ")
-        print(args_list)
+    def parse_cmd(self, command):
+        self.method = command[0]
+        queue_name = command[1]
+        task_id = command[1]
+        task_length = command[2]
+        task_data = command[3]
 
-        self._method = args_list[0]
-        self._queue_name = args_list[1]
-        self._task_id = args_list[1]
-        self._task_length = args_list[2]
-        self._task_data = args_list[3]
+    @staticmethod
+    def apply():
+        pass
 
-    @property
-    def method(self):
-        return self._method
 
-    @property
-    def queue_name(self):
-        return self._queue_name
+class ADDcommand(Command):
+    def __init__(self):
+        self._queue_name = self.command[1]
 
-    @property
-    def task_length(self):
-        return self._task_length
+    pass
 
-    @property
-    def task_data(self):
-        return self._task_data
 
-    @property
-    def task_id(self):
-        return self._task_id
+class GETcommand(Command):
+    pass
+
+
+class ACKcommand(Command):
+    pass
+
+
+class INcommand(Command):
+    pass
 
 
 class TaskQueueServer:
@@ -57,10 +59,12 @@ class TaskQueueServer:
         self._queues = defaultdict(list)
 
     def apply_command_action(self, current_command):
-        t = "b'ADD"
-        if current_command.method == t:
-            added_task_id = self.add_task(current_command)
-            return added_task_id
+        cmd_name, *args = current_command.split(' ')
+        if not cmd_name:
+            raise AttributeError
+        cmd_name = cmd_name.strip().lower()
+        cmd = {'ADD': add_cmd, 'GET': del_cmd, 'ACK': ack_cmd, 'IN': in_cmd, 'SAVE': save_cmd}
+
         elif current_command.method == 'GET':
             self.get_task(current_command)
         elif current_command.method == 'ACK':
@@ -81,25 +85,39 @@ class TaskQueueServer:
             current_connection, address = connection.accept()
             while True:
                 command = current_connection.recv(2048)
-                current_command = Command(command)
+                #current_command = Command(command)
+                self.apply_command_action(command)
                 res = self.apply_command_action(current_command)
                 current_connection.send(res.encode('utf8'))
 
     def add_task(self, current_command):
-        task = Task(current_command.task_length, current_command.task_data)
-        self.queues[current_command.queue_name].append(task)
-        return str(task.task_id)
+        added_task = Task(current_command.task_length, current_command.task_data)
+        self.queues[current_command.queue_name].append(added_task)
+        return str(added_task.task_id)
 
     def get_task(self, current_command):
-        pass
+        res = None
+        for x in list(reversed(self.queues[current_command.queue_name])):
+            if x.status == 'Free' and x.timeout == '300':
+                res = x.id + x.lenght + x.data
+                x.status = 'Busy' # что делать с таймаутом?
+                break
+        return res
 
     def ack_task(self, current_command):
-        pass
+        for idx, x in enumerate(self.queues[current_command.queue_name]):
+            if x.id == current_command.id:
+                self.queues[current_command.queue_name].pop(idx - 1)
+        return 'OK'
 
     def check_task_in_queue(self, current_command):
-        pass
+        res = 'NO'
+        if current_command.task_id in self.queues[current_command.queue_name]:
+            res = 'YES'
+        return res
 
     def save_state(self):
+
         pass
 
     @property
