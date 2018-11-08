@@ -61,6 +61,15 @@ class ServerBaseTest(TestCase):
     def test_wrong_command(self):
         self.assertEqual(b'ERROR', self.send(b'ADDD 1 5 12345'))
 
+    def test_wrong_length(self):
+        data = 'x' * 1000000 + 'x'
+        data = data.encode('utf')
+        self.assertEqual(b'ERROR', self.send(b'ADD 1 1000001 ' + data))
+
+    def test_wrong_command_data_length(self):
+        data = '12345'
+        data = data.encode('utf')
+        self.assertEqual(b'ERROR', self.send(b'ADD 1 10 ' + data))
 
 if __name__ == '__main__':
     unittest.main()
