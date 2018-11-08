@@ -3,6 +3,7 @@ import argparse
 import uuid
 import re
 import time
+import pickle
 from collections import defaultdict
 
 
@@ -12,10 +13,6 @@ class Task:
         self._length = length
         self._data = data
         self._status = 'Free'
-
-    @property
-    def task_id(self):
-        return self._task_id
 
 
 class TaskQueueServer:
@@ -32,49 +29,47 @@ class TaskQueueServer:
         match = add_cmd_pattern.match(current_command.rstrip())
         added_task = Task(match.group('length'), match.group('data'))
         self._queues[match.group('queue')].append(added_task)
-        return str(added_task.task_id)
+        return str(added_task._task_id)
 
     def get_cmd(self, current_command):
         get_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*)')
         match = get_cmd_pattern.match(current_command.rstrip())
         res = 'NONE'
-        for x in list(reversed(self._queues[match.group('queue')])):
-            if x._status == 'Free':
-                res = str(x._task_id) + str(x._length) + str(x._data)
-                x._status = 'Busy'
-                x.issue_time = time.time()
-                self._task_in_work[match.group('queue')].append(x)
+        for task in self._queues[match.group('queue')]:
+            if task._status == 'Free':
+                res = str(task._task_id) + str(task._length) + str(task._data)
+                task._status = 'Busy'
+                task.issue_time = time.time()
+                self._task_in_work[match.group('queue')].append(task)
                 break
         return res
 
     def ack_cmd(self, current_command):
         ack_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
         match = ack_cmd_pattern.match(current_command.rstrip())
-        for x in self._queues[match.group('queue')]:
-            if x._task_id == match.group('id'):
-                self._queues[match.group('queue')].remove(x)
-                self._task_in_work[match.group('queue')].remove(x)
+        for task in self._queues[match.group('queue')]:
+            if task._task_id == match.group('id'):
+                self._queues[match.group('queue')].remove(task)
+                self._task_in_work[match.group('queue')].remove(task)
         return 'OK'
 
     def check_task_cmd(self, current_command):
         in_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
         match = in_cmd_pattern.match(current_command.rstrip())
         res = 'NO'
-        for x in self._queues[match.group('queue')]:
-            if str(x._task_id) == match.group('id'):
+        for task in self._queues[match.group('queue')]:
+            if str(task._task_id) == match.group('id'):
                 res = 'YES'
                 break
         return res
 
     def save_cmd(self, current_command):
-        save_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
-        match = save_cmd_pattern.match(current_command.rstrip())
         return 'OK'
 
-    def tasks_timeout_verification(self):
+    def check_tasks_timeout(self):
         for queue in self._task_in_work.values():
             for task in queue:
-                if time.time() - task.issue_time > 300:
+                if time.time() - task.issue_time > self._timeout:
                     task._status = 'Free'
                     self._task_in_work[queue].remove(task)
 
@@ -98,7 +93,7 @@ class TaskQueueServer:
             current_connection, address = connection.accept()
             while True:
                 command = (current_connection.recv(2048)).decode('utf8')
-                self.tasks_timeout_verification()
+                self.check_tasks_timeout()
                 res = self.apply_command_action(command)
                 current_connection.send(res.encode('utf8'))
 
