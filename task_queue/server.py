@@ -24,8 +24,8 @@ class TaskQueueServer:
         self.timeout = timeout
         if os.path.exists(path):
             load_queues = pickle.load(open(path, 'rb'))
-            self.queues = load_queues[0][1]
-            self.tasks_in_work = load_queues[1][1]
+            self.queues = load_queues['_queues']
+            self.tasks_in_work = load_queues['_tasks_in_work']
         else:
             self.queues = defaultdict(list)
             self.tasks_in_work = defaultdict(list)
