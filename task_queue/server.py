@@ -93,15 +93,19 @@ class TaskQueueServer:
                     self.tasks_in_work[queue].remove(task)
 
     def handle_connection(self, current_command):
-        cmd_name, *args = current_command.split(' ')
-        if not cmd_name:
-            return 'RECV FORMAT ERROR'
-        cmd_name = cmd_name.strip().lower()
-        cmd = {'add': self.add_cmd, 'get': self.get_cmd, 'ack': self.ack_cmd,
-               'in': self.check_task_cmd, 'save': self.save_cmd}.get(cmd_name)
-        if not cmd:
-            return 'ERROR'
-        return cmd(current_command)
+        try:
+            cmd_name, *args = current_command.split(' ')
+            if not cmd_name:
+                return 'ERROR'
+            cmd_name = cmd_name.strip().lower()
+            cmd = {'add': self.add_cmd, 'get': self.get_cmd, 'ack': self.ack_cmd,
+                   'in': self.check_task_cmd, 'save': self.save_cmd}.get(cmd_name)
+            if not cmd:
+                return 'ERROR'
+            resp = cmd(current_command)
+        except Exception as e:
+            resp = e
+        return resp
 
     def run(self):
         print('Starting the server...')
