@@ -33,6 +33,8 @@ class TaskQueueServer:
     def add_cmd(self, current_command):
         add_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<length>.*) (?P<data>.*)')
         match = add_cmd_pattern.match(current_command.rstrip())
+        if not match:
+            return 'ERROR'
         if int(match.group('length')) > 10**6 or int(match.group('length')) != len(match.group('data')):
             return 'ERROR'
         added_task = Task(match.group('length'), match.group('data'))
@@ -42,6 +44,8 @@ class TaskQueueServer:
     def get_cmd(self, current_command):
         get_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*)')
         match = get_cmd_pattern.match(current_command.rstrip())
+        if not match:
+            return 'ERROR'
         res = 'NONE'
         for task in self.queues[match.group('queue')]:
             if not task.in_work:
@@ -55,6 +59,8 @@ class TaskQueueServer:
     def ack_cmd(self, current_command):
         ack_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
         match = ack_cmd_pattern.match(current_command.rstrip())
+        if not match:
+            return 'ERROR'
         for task in self.queues[match.group('queue')]:
             if str(task.task_id) == match.group('id'):
                 self.queues[match.group('queue')].remove(task)
@@ -65,6 +71,8 @@ class TaskQueueServer:
     def check_task_cmd(self, current_command):
         in_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
         match = in_cmd_pattern.match(current_command.rstrip())
+        if not match:
+            return 'ERROR'
         res = 'NO'
         for task in self.queues[match.group('queue')]:
             if str(task.task_id) == match.group('id'):
