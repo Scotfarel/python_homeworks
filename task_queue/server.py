@@ -33,7 +33,7 @@ class TaskQueueServer:
     def add_cmd(self, current_command):
         add_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<length>.*) (?P<data>.*)')
         match = add_cmd_pattern.match(current_command.rstrip())
-        if int(match.group('length')) < 10**6 or int(match.group('length')) != len(match.group('data')):
+        if int(match.group('length')) > 10**6 or int(match.group('length')) != len(match.group('data')):
             return 'ERROR'
         added_task = Task(match.group('length'), match.group('data'))
         self.queues[match.group('queue')].append(added_task)
@@ -56,10 +56,11 @@ class TaskQueueServer:
         ack_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
         match = ack_cmd_pattern.match(current_command.rstrip())
         for task in self.queues[match.group('queue')]:
-            if task.task_id == match.group('id'):
+            if str(task.task_id) == match.group('id'):
                 self.queues[match.group('queue')].remove(task)
                 self.tasks_in_work[match.group('queue')].remove(task)
-                return 'OK'
+                return 'YES'
+        return 'NO'
 
     def check_task_cmd(self, current_command):
         in_cmd_pattern = re.compile('(?P<method>.*) (?P<queue>.*) (?P<id>.*)')
@@ -101,11 +102,12 @@ class TaskQueueServer:
         connection.listen(1)
         while True:
             current_connection, address = connection.accept()
-            while True:
-                command = (current_connection.recv(2048)).decode('utf8')
-                self.check_tasks_timeout()
-                res = self.apply_command_action(command)
-                current_connection.send(res.encode('utf8'))
+            command = (current_connection.recv(2**20)).decode('utf')
+            self.check_tasks_timeout()
+            res = self.apply_command_action(command)
+            current_connection.send(res.encode('utf'))
+            current_connection.shutdown(1)
+            current_connection.close()
 
 
 def parse_args():
