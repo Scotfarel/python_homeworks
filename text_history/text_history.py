@@ -23,7 +23,7 @@ class TextHistory:
         return self.version + 1
 
     def check_pos(self, pos):
-        if pos < 0 or pos > len(self.text):
+        if pos > len(self.text) or pos < 0:
             raise ValueError
 
     def action(self, action):
