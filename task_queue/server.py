@@ -92,7 +92,7 @@ class TaskQueueServer:
                     task.in_work = False
                     self.tasks_in_work[queue].remove(task)
 
-    def apply_command_action(self, current_command):
+    def handle_connection(self, current_command):
         cmd_name, *args = current_command.split(' ')
         if not cmd_name:
             return 'RECV FORMAT ERROR'
@@ -112,7 +112,7 @@ class TaskQueueServer:
             current_connection, address = connection.accept()
             command = (current_connection.recv(2**20)).decode('utf')
             self.check_tasks_timeout()
-            res = self.apply_command_action(command)
+            res = self.handle_connection(command)
             current_connection.send(res.encode('utf'))
             current_connection.shutdown(1)
             current_connection.close()
