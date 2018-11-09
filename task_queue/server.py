@@ -104,18 +104,25 @@ class TaskQueueServer:
         return cmd(current_command)
 
     def run(self):
+        print('Starting the server...')
         connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         connection.bind((self.ip, self.port))
         connection.listen(1)
         while True:
-            current_connection, address = connection.accept()
-            command = (current_connection.recv(2**20)).decode('utf')
-            self.check_tasks_timeout()
-            res = self.handle_connection(command)
-            current_connection.send(res.encode('utf'))
-            current_connection.shutdown(1)
-            current_connection.close()
+            try:
+                current_connection, address = connection.accept()
+                command = (current_connection.recv(2**20)).decode('utf')
+                self.check_tasks_timeout()
+                res = self.handle_connection(command)
+                current_connection.send(res.encode('utf'))
+                current_connection.shutdown(1)
+                current_connection.close()
+            except KeyboardInterrupt:
+                print('Shutting down...')
+                connection.close()
+                break
+        print('Done')
 
 
 def parse_args():
