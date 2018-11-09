@@ -96,7 +96,7 @@ class TaskQueueServer:
         try:
             cmd_name, *args = current_command.split(' ')
             if not cmd_name:
-                return 'ERROR'
+                return 'RECV ERROR'
             cmd_name = cmd_name.strip().lower()
             cmd = {'add': self.add_cmd, 'get': self.get_cmd, 'ack': self.ack_cmd,
                    'in': self.check_task_cmd, 'save': self.save_cmd}.get(cmd_name)
