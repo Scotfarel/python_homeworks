@@ -15,9 +15,6 @@ class Task:
         self.data = data
         self.in_work = False
 
-    def change_state(self):
-        self.in_work = True if not self.in_work else False
-
 
 class TaskQueueServer:
     def __init__(self, ip, port, path, timeout):
@@ -26,8 +23,9 @@ class TaskQueueServer:
         self.path = path
         self.timeout = timeout
         if os.path.exists(path):
-            self.queues = pickle.load(open(path, 'rb'))[0][1]
-            self.tasks_in_work = pickle.load(open(path, 'rb'))[1][1]
+            load_queues = pickle.load(open(path, 'rb'))
+            self.queues = load_queues[0][1]
+            self.tasks_in_work = load_queues[1][1]
         else:
             self.queues = defaultdict(list)
             self.tasks_in_work = defaultdict(list)
@@ -48,7 +46,7 @@ class TaskQueueServer:
         for task in self.queues[match.group('queue')]:
             if not task.in_work:
                 res = f'{task.task_id} {task.length} {task.data}'
-                task.change_state()
+                task.in_work = True
                 task.issue_time = time.time()
                 self.tasks_in_work[match.group('queue')].append(task)
                 break
@@ -82,7 +80,7 @@ class TaskQueueServer:
         for queue in self.tasks_in_work.values():
             for task in queue:
                 if time.time() - task.issue_time > self.timeout:
-                    task.change_state()
+                    task.in_work = False
                     self.tasks_in_work[queue].remove(task)
 
     def apply_command_action(self, current_command):
