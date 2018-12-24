@@ -1,47 +1,64 @@
-
 import hashlib
 import uuid
 import pymysql.cursors
 
 
 class BlogApp:
-    salt = b'some_salt'
-    tokens_dict = {}
-    db_connection = pymysql.connect(host='localhost',
+    def __init__(self):
+        self._salt = b'some_salt'
+        self._tokens_dict = {}
+        self.db_connection = pymysql.connect(host='localhost',
                                     user='BlogApp_User',
                                     password='BlogApp_Password',
                                     db='BlogApp',
                                     charset='utf8mb4',
                                     cursorclass=pymysql.cursors.DictCursor)
 
-    def get_hash(self, flexible_data):
+    def __del__(self):
+        self.db_connection.close()
 
-        return hashlib.sha256(self.salt + flexible_data.encode('utf-8')).hexdigest()
+    @property
+    def get_salt(self):
+        return self._salt
+
+    @property
+    def get_tokens_dict(self):
+        return self._tokens_dict
+
+    def get_user_id_by_token(self, user_token):
+        user_id = self.get_tokens_dict.get(user_token)
+        if user_id is None:
+            raise KeyError('Incorrect User Token')
+        return user_id
+
+    def get_hash(self, sens_data):
+        return hashlib.sha256(self.get_salt + sens_data.encode('utf-8')).hexdigest()
 
     def add_new_user(self, user_username, user_email, user_password):
-
         with self.db_connection.cursor() as cursor:
+            sql = "SELECT UserID FROM User WHERE Username=%s OR Email=%s"
+            cursor.execute(sql, (user_username, user_email))
+            if cursor.fetchone() is not None:
+                raise ValueError('Username Or Email Are Already Taken')
             sql = "INSERT INTO User (Username, Email, Password) VALUES (%s, %s, %s)"
             cursor.execute(sql, (user_username, user_email, self.get_hash(user_password)))
         self.db_connection.commit()
 
     def authenticate_user(self, user_email, user_password):
-
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM User WHERE Email=%s AND Password=%s"
             cursor.execute(sql, (user_email, self.get_hash(user_password)))
             user_id_dict = cursor.fetchone()
-            if user_id_dict is not None:
-                user_token = uuid.uuid4()
-                user_id = user_id_dict.get('UserID')
-                self.tokens_dict.update({user_token: user_id})
-            else:
-                raise KeyError('Incorrect Login/Password Pair. Please, Try Again')
+        if user_id_dict is not None:
+            user_token = uuid.uuid4()
+            user_id = user_id_dict.get('UserID')
+            self.get_tokens_dict[user_token] = user_id
+        else:
+            raise KeyError('Incorrect Login/Password Pair. Please, Try Again')
 
         return user_token
 
     def get_users_list(self):
-
         with self.db_connection.cursor() as cursor:
             sql = "SELECT Username FROM User"
             cursor.execute(sql)
@@ -50,10 +67,7 @@ class BlogApp:
         return users_list
 
     def get_auth_user_blog_list(self, user_token):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT BlogID, BlogName, BlogDescription FROM Blog WHERE UserID=%s"
@@ -63,7 +77,6 @@ class BlogApp:
         return auth_user_blog_list
 
     def get_blog_list(self):
-
         with self.db_connection.cursor() as cursor:
             sql = "SELECT BlogName, BlogDescription FROM Blog"
             cursor.execute(sql)
@@ -72,63 +85,59 @@ class BlogApp:
         return blog_list
 
     def create_blog(self, user_token, blog_name, blog_description):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
+            sql = "SELECT UserID FROM Blog WHERE BlogName=%s"
+            cursor.execute(sql, blog_name)
+            if cursor.fetchone() is not None:
+                raise ValueError('BlogName Are Already Taken')
             sql = "INSERT INTO Blog (BlogDescription, UserID, BlogName) VALUES (%s, %s, %s)"
             cursor.execute(sql, (blog_description, user_id, blog_name))
         self.db_connection.commit()
 
     def edit_blog(self, user_token, blog_id, changed_name=None, changed_description=None):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM Blog WHERE BlogID=%s"
             cursor.execute(sql, blog_id)
             blog_user_id = cursor.fetchone()
 
-        if blog_user_id.get('UserID') == user_id:
-            with self.db_connection.cursor() as cursor:
-                if changed_name is not None:
-                    sql = "UPDATE Blog SET BlogName=%s WHERE BlogID=%s"
-                    cursor.execute(sql, (changed_name, blog_id))
-                if changed_description is not None:
-                    sql = "UPDATE Blog SET BlogDescription=%s WHERE BlogID=%s"
-                    cursor.execute(sql, (changed_description, blog_id))
-            self.db_connection.commit()
-        else:
+        if blog_user_id.get('UserID') != user_id:
             raise ValueError('You Don\'t Have Enough Permission To Edit Someones Blog')
 
-    def delete_blog(self, blog_id, user_token):
+        with self.db_connection.cursor() as cursor:
+            if changed_name is not None:
+                sql = "SELECT UserID FROM Blog WHERE BlogName=%s"
+                cursor.execute(sql, changed_name)
+                if cursor.fetchone() is not None:
+                    raise ValueError('BlogName Are Already Taken')
+                sql = "UPDATE Blog SET BlogName=%s WHERE BlogID=%s"
+                cursor.execute(sql, (changed_name, blog_id))
+            if changed_description is not None:
+                sql = "UPDATE Blog SET BlogDescription=%s WHERE BlogID=%s"
+                cursor.execute(sql, (changed_description, blog_id))
+        self.db_connection.commit()
 
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+    def delete_blog(self, blog_id, user_token):
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM Blog WHERE BlogID=%s"
             cursor.execute(sql, blog_id)
             blog_user_id = cursor.fetchone()
 
-        if blog_user_id.get('UserID') == user_id:
-            with self.db_connection.cursor() as cursor:
-                sql = "DELETE FROM Blog WHERE BlogID=%s"
-                cursor.execute(sql, blog_id)
-            self.db_connection.commit()
-        else:
+        if blog_user_id.get('UserID') != user_id:
             raise ValueError('You Don\'t Have Enough Permission To Delete Someones Blog')
 
-    def create_post(self, user_token, blog_id, post_description, post_name):
+        with self.db_connection.cursor() as cursor:
+            sql = "DELETE FROM Blog WHERE BlogID=%s"
+            cursor.execute(sql, blog_id)
+        self.db_connection.commit()
 
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+    def create_post(self, user_token, blog_id, post_description, post_name):
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "INSERT INTO Post (UserID, BlogID, PostDescription, PostName) VALUES (%s, %s, %s, %s)"
@@ -136,10 +145,7 @@ class BlogApp:
         self.db_connection.commit()
 
     def edit_post(self, user_token, post_id, changed_name=None, changed_description=None):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM Post WHERE PostID=%s"
@@ -161,10 +167,7 @@ class BlogApp:
             raise ValueError('You Don\'t Have Enough Permission To Edit Someones Post')
 
     def delete_post(self, user_token, post_id):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM Post WHERE PostID=%s"
@@ -182,10 +185,7 @@ class BlogApp:
             raise ValueError('You Don\'t Have Enough Permission To Delete Someones Blog')
 
     def add_comment(self, user_token, comment_body, post_id, parrent_id=None):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         if parrent_id is not None:
             with self.db_connection.cursor() as cursor:
@@ -210,26 +210,19 @@ class BlogApp:
             self.db_connection.commit()
 
     def get_user_comments(self, user_token):
-
-        user_id = self.tokens_dict.get(user_token)
-        if user_id is None:
-            raise KeyError('Incorrect User Token')
+        user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT CommentID, CommentBody FROM Comment WHERE UserID=%s"
             cursor.execute(sql, user_id)
             user_comments = cursor.fetchall()
-
+            
         return user_comments
-
-    def __del__(self):
-        self.db_connection.close()
 
 
 blog = BlogApp()
 
-blog.add_new_user('salty_pirate', 'dungeon_pearl@deadisland.com', 'lacroza')
-
+# blog.add_new_user('salty_pirateeee', 'dungeonyyyyy_pearl@deadisland.com', 'lacroza')
 # blog.add_new_user('check', 'the@gmail.com', 'sound')
 # user_token = blog.authenticate_user('the@gmail.com', 'sound')
 # print(blog.get_users_list())
@@ -243,7 +236,6 @@ blog.add_new_user('salty_pirate', 'dungeon_pearl@deadisland.com', 'lacroza')
 # blog.add_comment(user_token, 'hihiihihihi penis detrov', 2)
 # blog.add_comment(user_token, 'ti masky poteryal', 2, 7)
 # print(blog.get_user_comments(user_token))
-
-pirate_token = blog.authenticate_user('dungeon_pearl', 'lacroza')
-blog.add_comment(pirate_token, 'ho-ho-ho and a timestamp', 2)
-print(pirate_token)
+# pirate_token = blog.authenticate_user('dungeon_pearl', 'lacroza')
+# blog.add_comment(pirate_token, 'ho-ho-ho and a timestamp', 2)
+# print(pirate_token)
