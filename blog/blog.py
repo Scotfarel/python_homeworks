@@ -1,11 +1,11 @@
 
 import hashlib
 import uuid
-import time
 import pymysql.cursors
 
 
 class BlogApp:
+    salt = b'some_salt'
     tokens_dict = {}
     db_connection = pymysql.connect(host='localhost',
                                     user='BlogApp_User',
@@ -14,22 +14,22 @@ class BlogApp:
                                     charset='utf8mb4',
                                     cursorclass=pymysql.cursors.DictCursor)
 
+    def get_hash(self, flexible_data):
+
+        return hashlib.sha256(self.salt + flexible_data.encode('utf-8')).hexdigest()
+
     def add_new_user(self, user_username, user_email, user_password):
 
-        # salt = b'some_salt'
-        # hash_obj = hashlib.md5()
-        # hash_obj.update(salt)
-        # hash_obj.update(user_password.encode('utf-8'))
         with self.db_connection.cursor() as cursor:
             sql = "INSERT INTO User (Username, Email, Password) VALUES (%s, %s, %s)"
-            cursor.execute(sql, (user_username, user_email, user_password))
+            cursor.execute(sql, (user_username, user_email, self.get_hash(user_password)))
         self.db_connection.commit()
 
     def authenticate_user(self, user_email, user_password):
 
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM User WHERE Email=%s AND Password=%s"
-            cursor.execute(sql, (user_email, user_password))
+            cursor.execute(sql, (user_email, self.get_hash(user_password)))
             user_id_dict = cursor.fetchone()
             if user_id_dict is not None:
                 user_token = uuid.uuid4()
@@ -228,8 +228,10 @@ class BlogApp:
 
 blog = BlogApp()
 
+blog.add_new_user('salty_pirate', 'dungeon_pearl@deadisland.com', 'lacroza')
+
 # blog.add_new_user('check', 'the@gmail.com', 'sound')
-user_token = blog.authenticate_user('the@gmail.com', 'sound')
+# user_token = blog.authenticate_user('the@gmail.com', 'sound')
 # print(blog.get_users_list())
 # print(blog.get_blog_list())
 # blog.create_blog(user_token, 'dva chasa nochi', 'tyt kruto')
@@ -241,3 +243,7 @@ user_token = blog.authenticate_user('the@gmail.com', 'sound')
 # blog.add_comment(user_token, 'hihiihihihi penis detrov', 2)
 # blog.add_comment(user_token, 'ti masky poteryal', 2, 7)
 # print(blog.get_user_comments(user_token))
+
+pirate_token = blog.authenticate_user('dungeon_pearl', 'lacroza')
+blog.add_comment(pirate_token, 'ho-ho-ho and a timestamp', 2)
+print(pirate_token)
