@@ -1,18 +1,20 @@
+import argparse
+import sys
 import hashlib
 import uuid
 import pymysql.cursors
 
 
 class BlogApp:
-    def __init__(self):
-        self._salt = b'some_salt'
+    def __init__(self, salt, db_pwd, db_name):
+        self._salt = salt
         self._tokens_dict = {}
         self.db_connection = pymysql.connect(host='localhost',
-                                    user='BlogApp_User',
-                                    password='BlogApp_Password',
-                                    db='BlogApp',
-                                    charset='utf8mb4',
-                                    cursorclass=pymysql.cursors.DictCursor)
+                                             user='BlogApp_User',
+                                             password=db_pwd,
+                                             db=db_name,
+                                             charset='utf8mb4',
+                                             cursorclass=pymysql.cursors.DictCursor)
 
     def __del__(self):
         self.db_connection.close()
@@ -29,10 +31,11 @@ class BlogApp:
         user_id = self.get_tokens_dict.get(user_token)
         if user_id is None:
             raise KeyError('Incorrect User Token')
+
         return user_id
 
     def get_hash(self, sens_data):
-        return hashlib.sha256(self.get_salt + sens_data.encode('utf-8')).hexdigest()
+        return hashlib.sha256((self.get_salt + sens_data).encode('utf-8')).hexdigest()
 
     def add_new_user(self, user_username, user_email, user_password):
         with self.db_connection.cursor() as cursor:
@@ -220,22 +223,12 @@ class BlogApp:
         return user_comments
 
 
-blog = BlogApp()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='These are args from env')
+    parser.add_argument('salt', help='String used in hashing')
+    parser.add_argument('db_pwd', help='Pwd from current db')
+    parser.add_argument('db_name', help='Name from current db')
+    args = parser.parse_args(sys.argv[1:])
 
-# blog.add_new_user('salty_pirateeee', 'dungeonyyyyy_pearl@deadisland.com', 'lacroza')
-# blog.add_new_user('check', 'the@gmail.com', 'sound')
-# user_token = blog.authenticate_user('the@gmail.com', 'sound')
-# print(blog.get_users_list())
-# print(blog.get_blog_list())
-# blog.create_blog(user_token, 'dva chasa nochi', 'tyt kruto')
-# blog.edit_blog(user_token, 6, 'dva s polovinoi', 'ochen kruta')
-# blog.delete_blog(6, user_token)
-# blog.create_post(user_token, 4, 'nnnydavai', 'oldman')
-# blog.edit_post(user_token, 3, 'aaaaannnnnydavai', 'hhhhy i am oldman')
-# blog.delete_post(user_token, 3)
-# blog.add_comment(user_token, 'hihiihihihi penis detrov', 2)
-# blog.add_comment(user_token, 'ti masky poteryal', 2, 7)
-# print(blog.get_user_comments(user_token))
-# pirate_token = blog.authenticate_user('dungeon_pearl', 'lacroza')
-# blog.add_comment(pirate_token, 'ho-ho-ho and a timestamp', 2)
-# print(pirate_token)
+    blog = BlogApp(args.salt, args.db_pwd, args.db_name)
+    # Use class methods here
