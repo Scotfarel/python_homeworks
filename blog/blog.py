@@ -136,15 +136,15 @@ class BlogApp:
             cursor.execute(sql, blog_id)
         self.db_connection.commit()
 
-    def create_post(self, user_token, blog_id, post_description, post_name):
+    def create_post(self, user_token, blog_id, post_body, post_name):
         user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
-            sql = "INSERT INTO Post (UserID, BlogID, PostDescription, PostName) VALUES (%s, %s, %s, %s)"
-            cursor.execute(sql, (user_id, blog_id, post_description, post_name))
+            sql = "INSERT INTO Post (UserID, BlogID, PostBody, PostName) VALUES (%s, %s, %s, %s)"
+            cursor.execute(sql, (user_id, blog_id, post_body, post_name))
         self.db_connection.commit()
 
-    def edit_post(self, user_token, post_id, changed_name=None, changed_description=None):
+    def edit_post(self, user_token, post_id, changed_name=None, changed_body=None):
         user_id = self.get_user_id_by_token(user_token)
 
         with self.db_connection.cursor() as cursor:
@@ -154,17 +154,17 @@ class BlogApp:
             if post_user_id is None:
                 raise ValueError('There Is No Your Post With This post_id')
 
-        if post_user_id.get('UserID') == user_id:
-            with self.db_connection.cursor() as cursor:
-                if changed_name is not None:
-                    sql = "UPDATE Post SET PostName=%s WHERE PostID=%s"
-                    cursor.execute(sql, (changed_name, post_id))
-                if changed_description is not None:
-                    sql = "UPDATE Post SET PostDescription=%s WHERE PostID=%s"
-                    cursor.execute(sql, (changed_description, post_id))
-            self.db_connection.commit()
-        else:
+        if post_user_id.get('UserID') != user_id:
             raise ValueError('You Don\'t Have Enough Permission To Edit Someones Post')
+
+        with self.db_connection.cursor() as cursor:
+            if changed_name is not None:
+                sql = "UPDATE Post SET PostName=%s WHERE PostID=%s"
+                cursor.execute(sql, (changed_name, post_id))
+            if changed_body is not None:
+                sql = "UPDATE Post SET PostBody=%s WHERE PostID=%s"
+                cursor.execute(sql, (changed_body, post_id))
+        self.db_connection.commit()
 
     def delete_post(self, user_token, post_id):
         user_id = self.get_user_id_by_token(user_token)
@@ -176,13 +176,13 @@ class BlogApp:
             if post_user_id is None:
                 raise ValueError('There Is No Your Post With This post_id')
 
-        if post_user_id.get('UserID') == user_id:
-            with self.db_connection.cursor() as cursor:
-                sql = "DELETE FROM Post WHERE PostID=%s"
-                cursor.execute(sql, post_id)
-                self.db_connection.commit()
-        else:
+        if post_user_id.get('UserID') != user_id:
             raise ValueError('You Don\'t Have Enough Permission To Delete Someones Blog')
+
+        with self.db_connection.cursor() as cursor:
+            sql = "DELETE FROM Post WHERE PostID=%s"
+            cursor.execute(sql, post_id)
+        self.db_connection.commit()
 
     def add_comment(self, user_token, comment_body, post_id, parrent_id=None):
         user_id = self.get_user_id_by_token(user_token)
@@ -216,7 +216,7 @@ class BlogApp:
             sql = "SELECT CommentID, CommentBody FROM Comment WHERE UserID=%s"
             cursor.execute(sql, user_id)
             user_comments = cursor.fetchall()
-            
+
         return user_comments
 
 
