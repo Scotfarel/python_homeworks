@@ -11,6 +11,7 @@ class BlogApp:
     def __init__(self, salt, db_pwd, db_name):
         self._salt = salt
         self._tokens_dict = {}
+        self._comments_thread = []
         self.db_connection = pymysql.connect(host='localhost',
                                              user='BlogApp_User',
                                              password=db_pwd,
@@ -113,8 +114,10 @@ class BlogApp:
                 cursor.execute(sql, changed_name)
                 if cursor.fetchone() is not None:
                     raise ValueError('BlogName Are Already Taken')
+
                 sql = "UPDATE Blog SET BlogName=%s WHERE BlogID=%s"
                 cursor.execute(sql, (changed_name, blog_id))
+
             if changed_description is not None:
                 sql = "UPDATE Blog SET BlogDescription=%s WHERE BlogID=%s"
                 cursor.execute(sql, (changed_description, blog_id))
@@ -151,8 +154,8 @@ class BlogApp:
             sql = "SELECT UserID FROM Post WHERE PostID=%s"
             cursor.execute(sql, post_id)
             post_user_id = cursor.fetchone()
-            if post_user_id is None:
-                raise ValueError('There Is No Your Post With This post_id')
+        if post_user_id is None:
+            raise ValueError('There Is No Your Post With This post_id')
 
         if post_user_id.get('UserID') != user_id:
             raise ValueError('You Don\'t Have Enough Permission To Edit Someones Post')
@@ -173,8 +176,9 @@ class BlogApp:
             sql = "SELECT UserID FROM Post WHERE PostID=%s"
             cursor.execute(sql, post_id)
             post_user_id = cursor.fetchone()
-            if post_user_id is None:
-                raise ValueError('There Is No Your Post With This post_id')
+
+        if post_user_id is None:
+            raise ValueError('There Is No Your Post With This post_id')
 
         if post_user_id.get('UserID') != user_id:
             raise ValueError('You Don\'t Have Enough Permission To Delete Someones Blog')
@@ -218,6 +222,34 @@ class BlogApp:
             cursor.execute(sql, user_id)
             user_comments = cursor.fetchall()
         return user_comments
+
+    def get_comments_thread(self, comment_id):
+        with self.db_connection.cursor() as cursor:
+            sql = "SELECT CommentID, CommentBody FROM Comment WHERE ParentID=%s"
+            cursor.execute(sql, comment_id)
+            reply_comments = cursor.fetchall()
+
+        if reply_comments is None:
+            return self._comments_thread
+
+        for comment in reply_comments:
+            if comment not in self._comments_thread:
+                self._comments_thread.append(comment)
+            self.get_comments_thread(comment.get('CommentID'))
+
+    def get_users_comments_from_blog(self, blog_id, *users_id):
+        users_comments = []
+        for user in users_id:
+            with self.db_connection.cursor() as cursor:
+                sql = "SELECT CommentID, CommentBody FROM Comment WHERE ParentID=%s AND BlogID=%s"
+                cursor.execute(sql, user, blog_id)
+                reply_comments = cursor.fetchall()
+            if reply_comments is None:
+                continue
+            users_comments.append(reply_comments)
+        if len(users_comments) == 0:
+            raise ValueError('No Requested Comments')
+        return users_comments
 
     def fill_database(self):
         fake = Faker()
@@ -289,5 +321,5 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     blog = BlogApp(args.salt, args.db_pwd, args.db_name)
-    # blog.fill_database()
+
     # Use class methods here
