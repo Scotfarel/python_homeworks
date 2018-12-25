@@ -2,7 +2,9 @@ import argparse
 import sys
 import hashlib
 import uuid
+import random
 import pymysql.cursors
+from faker import Faker
 
 
 class BlogApp:
@@ -31,7 +33,6 @@ class BlogApp:
         user_id = self.get_tokens_dict.get(user_token)
         if user_id is None:
             raise KeyError('Incorrect User Token')
-
         return user_id
 
     def get_hash(self, sens_data):
@@ -52,12 +53,11 @@ class BlogApp:
             sql = "SELECT UserID FROM User WHERE Email=%s AND Password=%s"
             cursor.execute(sql, (user_email, self.get_hash(user_password)))
             user_id_dict = cursor.fetchone()
-        if user_id_dict is not None:
-            user_token = uuid.uuid4()
-            user_id = user_id_dict.get('UserID')
-            self.get_tokens_dict[user_token] = user_id
-        else:
+        if user_id_dict is None:
             raise KeyError('Incorrect Login/Password Pair. Please, Try Again')
+        user_token = uuid.uuid4()
+        user_id = user_id_dict.get('UserID')
+        self.get_tokens_dict[user_token] = user_id
 
         return user_token
 
@@ -66,7 +66,6 @@ class BlogApp:
             sql = "SELECT Username FROM User"
             cursor.execute(sql)
             users_list = cursor.fetchall()
-
         return users_list
 
     def get_auth_user_blog_list(self, user_token):
@@ -76,7 +75,6 @@ class BlogApp:
             sql = "SELECT BlogID, BlogName, BlogDescription FROM Blog WHERE UserID=%s"
             cursor.execute(sql, user_id)
             auth_user_blog_list = cursor.fetchall()
-
         return auth_user_blog_list
 
     def get_blog_list(self):
@@ -84,7 +82,6 @@ class BlogApp:
             sql = "SELECT BlogName, BlogDescription FROM Blog"
             cursor.execute(sql)
             blog_list = cursor.fetchall()
-
         return blog_list
 
     def create_blog(self, user_token, blog_name, blog_description):
@@ -187,29 +184,30 @@ class BlogApp:
             cursor.execute(sql, post_id)
         self.db_connection.commit()
 
-    def add_comment(self, user_token, comment_body, post_id, parrent_id=None):
+    def add_comment(self, user_token, comment_body, post_id, parent_id=None):
         user_id = self.get_user_id_by_token(user_token)
 
-        if parrent_id is not None:
+        if parent_id is None:
             with self.db_connection.cursor() as cursor:
-                sql = "SELECT CommentID FROM Comment WHERE PostID=%s"
-                cursor.execute(sql, post_id)
-                result = cursor.fetchall()
-                if result is None:
-                    raise ValueError('There Is No Comment With This comment_id')
-
-            for comment in result:
-                if parrent_id == comment.get('CommentID'):
-                    with self.db_connection.cursor() as cursor:
-                        sql = "INSERT INTO Comment (UserID, CommentBody, PostID, ParrentID) VALUES (%s, %s, %s, %s)"
-                        cursor.execute(sql, (user_id, comment_body, post_id, parrent_id))
-                    break
+                sql = "INSERT INTO Comment (UserID, CommentBody, PostID) VALUES (%s, %s, %s)"
+                cursor.execute(sql, (user_id, comment_body, post_id))
             self.db_connection.commit()
 
         else:
             with self.db_connection.cursor() as cursor:
-                sql = "INSERT INTO Comment (UserID, CommentBody, PostID) VALUES (%s, %s, %s)"
-                cursor.execute(sql, (user_id, comment_body, post_id))
+                sql = "SELECT CommentID FROM Comment WHERE PostID=%s"
+                cursor.execute(sql, post_id)
+                result = cursor.fetchall()
+
+            if result is None:
+                raise ValueError('There Is No Comment With This comment_id')
+
+            for comment in result:
+                if parent_id == comment.get('CommentID'):
+                    with self.db_connection.cursor() as cursor:
+                        sql = "INSERT INTO Comment (UserID, CommentBody, PostID, ParentID) VALUES (%s, %s, %s, %s)"
+                        cursor.execute(sql, (user_id, comment_body, post_id, parent_id))
+                    break
             self.db_connection.commit()
 
     def get_user_comments(self, user_token):
@@ -219,8 +217,68 @@ class BlogApp:
             sql = "SELECT CommentID, CommentBody FROM Comment WHERE UserID=%s"
             cursor.execute(sql, user_id)
             user_comments = cursor.fetchall()
-
         return user_comments
+
+    def fill_database(self):
+        fake = Faker()
+
+        n_users = 1000
+        n_blogs = 100
+        n_posts = 10000
+        n_comments = 100000
+
+        for user in range(n_users):
+            try:
+                self.add_new_user(fake.name(), fake.email(), fake.password())
+            except ValueError:
+                n_users += 1
+                continue
+
+        for blog in range(n_blogs):
+            try:
+                username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
+                self.add_new_user(username, user_email, user_pwd)
+                user_token = self.authenticate_user(user_email, user_pwd)
+                self.create_blog(user_token,
+                                 fake.word(ext_word_list=None),
+                                 fake.sentence(nb_words=6, variable_nb_words=True, ext_word_list=None))
+            except ValueError:
+                n_blogs += 1
+                continue
+            except KeyError:
+                n_blogs += 1
+                continue
+
+        for post in range(n_posts):
+            try:
+                username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
+                self.add_new_user(username, user_email, user_pwd)
+                user_token = self.authenticate_user(user_email, user_pwd)
+                self.create_post(user_token,
+                                 random.randint(1, n_blogs),
+                                 fake.text(max_nb_chars=200, ext_word_list=None),
+                                 fake.bs())
+            except ValueError:
+                n_posts += 1
+                continue
+            except KeyError:
+                n_posts += 1
+                continue
+
+        for comment in range(n_comments):
+            try:
+                username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
+                self.add_new_user(username, user_email, user_pwd)
+                user_token = self.authenticate_user(user_email, user_pwd)
+                self.add_comment(user_token,
+                                 fake.sentence(nb_words=6, variable_nb_words=True, ext_word_list=None),
+                                 random.randint(1, n_posts))
+            except ValueError:
+                n_comments += 1
+                continue
+            except KeyError:
+                n_comments += 1
+                continue
 
 
 if __name__ == '__main__':
@@ -231,4 +289,5 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     blog = BlogApp(args.salt, args.db_pwd, args.db_name)
+    # blog.fill_database()
     # Use class methods here
