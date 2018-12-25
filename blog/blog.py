@@ -1,5 +1,4 @@
 import argparse
-import sys
 import hashlib
 import uuid
 import random
@@ -22,29 +21,21 @@ class BlogApp:
     def __del__(self):
         self.db_connection.close()
 
-    @property
-    def get_salt(self):
-        return self._salt
-
-    @property
-    def get_tokens_dict(self):
-        return self._tokens_dict
-
     def get_user_id_by_token(self, user_token):
-        user_id = self.get_tokens_dict.get(user_token)
+        user_id = self._tokens_dict.get(user_token)
         if user_id is None:
-            raise KeyError('Incorrect User Token')
+            raise KeyError('Token is corrupted. Try to authenticate again.')
         return user_id
 
     def get_hash(self, sens_data):
-        return hashlib.sha256((self.get_salt + sens_data).encode('utf-8')).hexdigest()
+        return hashlib.sha256((self._salt + sens_data).encode('utf-8')).hexdigest()
 
     def add_new_user(self, user_username, user_email, user_password):
         with self.db_connection.cursor() as cursor:
             sql = "SELECT UserID FROM User WHERE Username=%s OR Email=%s"
             cursor.execute(sql, (user_username, user_email))
             if cursor.fetchone() is not None:
-                raise ValueError('Username Or Email Are Already Taken')
+                raise ValueError(f'Username "{user_username}" or Email "{user_email}" are already taken')
             sql = "INSERT INTO User (Username, Email, Password) VALUES (%s, %s, %s)"
             cursor.execute(sql, (user_username, user_email, self.get_hash(user_password)))
         self.db_connection.commit()
@@ -55,10 +46,10 @@ class BlogApp:
             cursor.execute(sql, (user_email, self.get_hash(user_password)))
             user_id_dict = cursor.fetchone()
         if user_id_dict is None:
-            raise KeyError('Incorrect Login/Password Pair. Please, Try Again')
+            raise KeyError('Incorrect Login/Password pair. Please, try again')
         user_token = uuid.uuid4()
-        user_id = user_id_dict.get('UserID')
-        self.get_tokens_dict[user_token] = user_id
+        user_id = user_id_dict['UserID']
+        self._tokens_dict[user_token] = user_id
 
         return user_token
 
@@ -92,7 +83,7 @@ class BlogApp:
             sql = "SELECT UserID FROM Blog WHERE BlogName=%s"
             cursor.execute(sql, blog_name)
             if cursor.fetchone() is not None:
-                raise ValueError('BlogName Are Already Taken')
+                raise ValueError(f'BlogName "{blog_name}" is already taken')
             sql = "INSERT INTO Blog (BlogDescription, UserID, BlogName) VALUES (%s, %s, %s)"
             cursor.execute(sql, (blog_description, user_id, blog_name))
         self.db_connection.commit()
@@ -105,15 +96,15 @@ class BlogApp:
             cursor.execute(sql, blog_id)
             blog_user_id = cursor.fetchone()
 
-        if blog_user_id.get('UserID') != user_id:
-            raise ValueError('You Don\'t Have Enough Permission To Edit Someones Blog')
+        if blog_user_id['UserID'] != user_id:
+            raise ValueError('You don\'t have enough permission to edit someones blog. Verify your "blog_id"')
 
         with self.db_connection.cursor() as cursor:
             if changed_name is not None:
                 sql = "SELECT UserID FROM Blog WHERE BlogName=%s"
                 cursor.execute(sql, changed_name)
                 if cursor.fetchone() is not None:
-                    raise ValueError('BlogName Are Already Taken')
+                    raise ValueError(f'BlogName "{changed_name}" is already taken')
 
                 sql = "UPDATE Blog SET BlogName=%s WHERE BlogID=%s"
                 cursor.execute(sql, (changed_name, blog_id))
@@ -131,8 +122,8 @@ class BlogApp:
             cursor.execute(sql, blog_id)
             blog_user_id = cursor.fetchone()
 
-        if blog_user_id.get('UserID') != user_id:
-            raise ValueError('You Don\'t Have Enough Permission To Delete Someones Blog')
+        if blog_user_id['UserID'] != user_id:
+            raise ValueError('You don\'t have enough permission to delete someones blog. Verify your "blog_id"')
 
         with self.db_connection.cursor() as cursor:
             sql = "DELETE FROM Blog WHERE BlogID=%s"
@@ -155,10 +146,10 @@ class BlogApp:
             cursor.execute(sql, post_id)
             post_user_id = cursor.fetchone()
         if post_user_id is None:
-            raise ValueError('There Is No Your Post With This post_id')
+            raise ValueError(f'No post with post_id {post_id}. Verify your "post_id"')
 
-        if post_user_id.get('UserID') != user_id:
-            raise ValueError('You Don\'t Have Enough Permission To Edit Someones Post')
+        if post_user_id['UserID'] != user_id:
+            raise ValueError('You don\'t have enough permission to edit someones post. Verify your "post_id"')
 
         with self.db_connection.cursor() as cursor:
             if changed_name is not None:
@@ -178,10 +169,10 @@ class BlogApp:
             post_user_id = cursor.fetchone()
 
         if post_user_id is None:
-            raise ValueError('There Is No Your Post With This post_id')
+            raise ValueError(f'No post with post_id {post_id}. Verify your "post_id"')
 
-        if post_user_id.get('UserID') != user_id:
-            raise ValueError('You Don\'t Have Enough Permission To Delete Someones Blog')
+        if post_user_id['UserID'] != user_id:
+            raise ValueError('You don\'t have enough permission to delete someones post. Verify your "post_id"')
 
         with self.db_connection.cursor() as cursor:
             sql = "DELETE FROM Post WHERE PostID=%s"
@@ -204,7 +195,7 @@ class BlogApp:
                 result = cursor.fetchall()
 
             if result is None:
-                raise ValueError('There Is No Comment With This comment_id')
+                raise ValueError(f'No comment with comment_id {parent_id}. Verify your "parent_id"')
 
             for comment in result:
                 if parent_id == comment.get('CommentID'):
@@ -247,78 +238,78 @@ class BlogApp:
             if reply_comments is None:
                 continue
             users_comments.append(reply_comments)
-        if len(users_comments) == 0:
-            raise ValueError('No Requested Comments')
         return users_comments
+
+    def get_new_user_token(self):
+        fake = Faker()
+
+        username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
+        self.add_new_user(username, user_email, user_pwd)
+        user_token = self.authenticate_user(user_email, user_pwd)
+        return user_token
 
     def fill_database(self):
         fake = Faker()
 
-        n_users = 1000
-        n_blogs = 100
-        n_posts = 10000
-        n_comments = 100000
+        filled_users = 1000
+        filled_blogs = 100
+        filled_posts = 10000
+        filled_comments = 100000
 
-        for user in range(n_users):
+        users = 0
+        while users < filled_users:
             try:
                 self.add_new_user(fake.name(), fake.email(), fake.password())
+                users += 1
             except ValueError:
-                n_users += 1
                 continue
 
-        for blog in range(n_blogs):
+        blogs = 0
+        while blogs < filled_blogs:
             try:
-                username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
-                self.add_new_user(username, user_email, user_pwd)
-                user_token = self.authenticate_user(user_email, user_pwd)
+                user_token = self.get_new_user_token()
                 self.create_blog(user_token,
                                  fake.word(ext_word_list=None),
                                  fake.sentence(nb_words=6, variable_nb_words=True, ext_word_list=None))
-            except ValueError:
-                n_blogs += 1
-                continue
-            except KeyError:
-                n_blogs += 1
+                blogs += 1
+            except ValueError or KeyError:
                 continue
 
-        for post in range(n_posts):
+        posts = 0
+        while posts < filled_posts:
             try:
-                username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
-                self.add_new_user(username, user_email, user_pwd)
-                user_token = self.authenticate_user(user_email, user_pwd)
+                user_token = self.get_new_user_token()
                 self.create_post(user_token,
-                                 random.randint(1, n_blogs),
+                                 random.randint(1, filled_blogs),
                                  fake.text(max_nb_chars=200, ext_word_list=None),
                                  fake.bs())
-            except ValueError:
-                n_posts += 1
-                continue
-            except KeyError:
-                n_posts += 1
+                posts += 1
+            except ValueError or KeyError:
                 continue
 
-        for comment in range(n_comments):
+        comments = 0
+        while comments < filled_comments:
             try:
-                username, user_email, user_pwd = fake.name(), fake.email(), fake.password()
-                self.add_new_user(username, user_email, user_pwd)
-                user_token = self.authenticate_user(user_email, user_pwd)
+                user_token = self.get_new_user_token()
                 self.add_comment(user_token,
                                  fake.sentence(nb_words=6, variable_nb_words=True, ext_word_list=None),
-                                 random.randint(1, n_posts))
-            except ValueError:
-                n_comments += 1
+                                 random.randint(1, filled_posts))
+                comments += 1
+            except ValueError or KeyError:
                 continue
-            except KeyError:
-                n_comments += 1
-                continue
+
+
+def create_args_parser():
+    prs = argparse.ArgumentParser(description='Blog class to work with db')
+    prs.add_argument('salt', help='String used in hashing')
+    prs.add_argument('db_pwd', help='Pwd from current db')
+    prs.add_argument('db_name', help='Name from current db')
+    return prs
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='These are args from env')
-    parser.add_argument('salt', help='String used in hashing')
-    parser.add_argument('db_pwd', help='Pwd from current db')
-    parser.add_argument('db_name', help='Name from current db')
-    args = parser.parse_args(sys.argv[1:])
+    parser = create_args_parser()
+    args = parser.parse_args()
 
     blog = BlogApp(args.salt, args.db_pwd, args.db_name)
 
