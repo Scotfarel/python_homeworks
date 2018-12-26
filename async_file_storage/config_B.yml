@@ -1,0 +1,11 @@
+host: 'localhost'
+port: 5556
+directory: './storage/storage_B'
+save_found: false
+neighbours:
+  A:
+    host: 'localhost'
+    port: 5555
+  C:
+    host: 'localhost'
+    port: 5557
