@@ -22,8 +22,6 @@ def save_added_matrix(input_matrix_name, output_matrix_name):
         raise ArithmeticError('Incorrect matrix input. Matrix should be squared')
 
     added_matrix = list(zip(*matrix))
-    print(added_matrix)
-
     json.dump(added_matrix, open(output_matrix_name, 'w'))
 
 
