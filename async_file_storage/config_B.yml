@@ -1,7 +1,7 @@
 host: 'localhost'
 port: 5556
 directory: './storage/storage_B'
-save_found: false
+save_found: true
 neighbours:
   A:
     host: 'localhost'
